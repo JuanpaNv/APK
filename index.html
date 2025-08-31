@@ -5,9 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Registro de Mantenimientos</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Biblioteca para generar PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -58,12 +56,14 @@
             background: #f8f9fa;
         }
 
-        .preview-section {
+        .records-section {
             padding: 20px;
             background: white;
             border-top: 1px solid #eee;
             display: flex;
             flex-direction: column;
+            max-height: 400px;
+            overflow-y: auto;
         }
 
         .section-title {
@@ -72,6 +72,14 @@
             margin-bottom: 15px;
             padding-bottom: 8px;
             border-bottom: 2px solid #3498db;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .section-title button {
+            padding: 8px 15px;
+            font-size: 14px;
         }
 
         .form-group {
@@ -174,23 +182,45 @@
             cursor: crosshair;
         }
 
-        .preview-content {
+        .records-content {
             flex: 1;
             overflow-y: auto;
         }
 
-        .preview-item {
+        .record-item {
             margin-bottom: 15px;
             padding: 12px;
             background: #f8f9fa;
             border-radius: 6px;
             font-size: 14px;
+            border-left: 4px solid #3498db;
         }
 
-        .preview-item h3 {
+        .record-item h3 {
             font-size: 15px;
             color: #2c3e50;
             margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .record-item .record-date {
+            font-size: 12px;
+            color: #7f8c8d;
+        }
+
+        .record-details {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .record-detail {
+            margin-bottom: 5px;
+        }
+
+        .record-detail strong {
+            color: #2c3e50;
         }
 
         .preview-image {
@@ -254,6 +284,13 @@
             transform: translateY(-50%);
         }
 
+        .empty-records {
+            text-align: center;
+            padding: 20px;
+            color: #7f8c8d;
+            font-style: italic;
+        }
+
         @media (min-width: 768px) {
             .app-content {
                 flex-direction: row;
@@ -264,7 +301,7 @@
                 flex: 1;
             }
             
-            .preview-section {
+            .records-section {
                 flex: 1;
                 border-left: 1px solid #eee;
                 border-top: none;
@@ -288,6 +325,10 @@
             
             .download-btn .btn {
                 width: 100%;
+            }
+            
+            .record-details {
+                grid-template-columns: 1fr;
             }
         }
     </style>
@@ -383,32 +424,16 @@
                 </div>
             </div>
             
-            <div class="preview-section">
-                <h2 class="section-title">Vista Previa</h2>
-                <div class="preview-content" id="previewContent">
-                    <div class="preview-item">
-                        <h3>Datos del Equipo</h3>
-                        <div id="previewEquipment">No seleccionado</div>
-                    </div>
-                    
-                    <div class="preview-item">
-                        <h3>Detalles del Mantenimiento</h3>
-                        <div id="previewMaintenance">No seleccionado</div>
-                    </div>
-                    
-                    <div class="preview-item">
-                        <h3>Encargado</h3>
-                        <div id="previewResponsible">No especificado</div>
-                    </div>
-                    
-                    <div class="preview-item">
-                        <h3>Fotografía</h3>
-                        <div id="previewPhoto">No hay foto</div>
-                    </div>
-                    
-                    <div class="preview-item">
-                        <h3>Firma</h3>
-                        <div id="previewSignature">No hay firma</div>
+            <div class="records-section">
+                <h2 class="section-title">
+                    Registros Guardados
+                    <button class="btn btn-warning" id="clearAllBtn">
+                        <i class="fas fa-trash"></i> Limpiar Todo
+                    </button>
+                </h2>
+                <div class="records-content" id="recordsContent">
+                    <div class="empty-records" id="emptyRecords">
+                        No hay registros guardados. Complete el formulario y haga clic en "Guardar Registro".
                     </div>
                 </div>
             </div>
@@ -438,13 +463,9 @@
             const resetBtn = document.getElementById('resetBtn');
             const toast = document.getElementById('toast');
             const downloadPdfBtn = document.getElementById('downloadPdf');
-            
-            // Elementos de vista previa
-            const previewEquipment = document.getElementById('previewEquipment');
-            const previewMaintenance = document.getElementById('previewMaintenance');
-            const previewResponsible = document.getElementById('previewResponsible');
-            const previewPhoto = document.getElementById('previewPhoto');
-            const previewSignature = document.getElementById('previewSignature');
+            const clearAllBtn = document.getElementById('clearAllBtn');
+            const recordsContent = document.getElementById('recordsContent');
+            const emptyRecords = document.getElementById('emptyRecords');
             
             // Variables para almacenar datos
             let currentPhoto = null;
@@ -551,7 +572,6 @@
             
             function stopDrawing() {
                 isDrawing = false;
-                updateSignaturePreview();
             }
             
             // Capturar foto
@@ -569,7 +589,6 @@
                     const reader = new FileReader();
                     reader.onload = function(event) {
                         currentPhoto = event.target.result;
-                        updatePhotoPreview();
                     }
                     reader.readAsDataURL(e.target.files[0]);
                 }
@@ -579,32 +598,7 @@
             clearSignature.addEventListener('click', function() {
                 ctx.clearRect(0, 0, signaturePad.width, signaturePad.height);
                 currentSignature = null;
-                updateSignaturePreview();
             });
-            
-            // Actualizar vistas previas
-            function updatePreviews() {
-                previewEquipment.textContent = `${equipmentType.options[equipmentType.selectedIndex].text} - ${equipmentId.value}`;
-                previewMaintenance.textContent = `${maintenanceType.options[maintenanceType.selectedIndex].text} - ${description.value}`;
-                previewResponsible.textContent = responsible.value;
-            }
-            
-            function updatePhotoPreview() {
-                if (currentPhoto) {
-                    previewPhoto.innerHTML = `<img src="${currentPhoto}" class="preview-image" alt="Foto del equipo">`;
-                } else {
-                    previewPhoto.textContent = 'No hay foto';
-                }
-            }
-            
-            function updateSignaturePreview() {
-                if (signaturePad.toDataURL() !== document.createElement('canvas').toDataURL()) {
-                    currentSignature = signaturePad.toDataURL();
-                    previewSignature.innerHTML = `<img src="${currentSignature}" class="signature-preview" alt="Firma">`;
-                } else {
-                    previewSignature.textContent = 'No hay firma';
-                }
-            }
             
             // Guardar en localStorage
             function saveToLocalStorage(record) {
@@ -616,6 +610,41 @@
             // Obtener registros del localStorage
             function getRecordsFromLocalStorage() {
                 return JSON.parse(localStorage.getItem('maintenanceRecords')) || [];
+            }
+            
+            // Mostrar registros en la interfaz
+            function displayRecords() {
+                const records = getRecordsFromLocalStorage();
+                recordsContent.innerHTML = '';
+                
+                if (records.length === 0) {
+                    emptyRecords.style.display = 'block';
+                    return;
+                }
+                
+                emptyRecords.style.display = 'none';
+                
+                records.forEach((record, index) => {
+                    const recordElement = document.createElement('div');
+                    recordElement.className = 'record-item';
+                    recordElement.innerHTML = `
+                        <h3>
+                            Registro #${index + 1}
+                            <span class="record-date">${new Date(record.datetime).toLocaleString('es-ES')}</span>
+                        </h3>
+                        <div class="record-details">
+                            <div class="record-detail"><strong>Tipo de equipo:</strong> ${record.equipmentType}</div>
+                            <div class="record-detail"><strong>Número de serie:</strong> ${record.equipmentId}</div>
+                            <div class="record-detail"><strong>Tipo de mantenimiento:</strong> ${record.maintenanceType}</div>
+                            <div class="record-detail"><strong>Responsable:</strong> ${record.responsible}</div>
+                        </div>
+                        ${record.description ? `<div class="record-detail"><strong>Descripción:</strong> ${record.description}</div>` : ''}
+                        ${record.photo ? `<div class="record-detail"><strong>Fotografía:</strong><br><img src="${record.photo}" class="preview-image" alt="Foto del equipo"></div>` : ''}
+                        ${record.signature ? `<div class="record-detail"><strong>Firma:</strong><br><img src="${record.signature}" class="signature-preview" alt="Firma"></div>` : ''}
+                    `;
+                    
+                    recordsContent.appendChild(recordElement);
+                });
             }
             
             // Generar PDF con todos los registros
@@ -736,18 +765,30 @@
                 showToast('PDF generado correctamente.');
             }
             
-            // Event listeners para actualizar vistas previas en tiempo real
-            equipmentType.addEventListener('change', updatePreviews);
-            equipmentId.addEventListener('input', updatePreviews);
-            maintenanceType.addEventListener('change', updatePreviews);
-            description.addEventListener('input', updatePreviews);
-            responsible.addEventListener('input', updatePreviews);
+            // Limpiar todos los registros
+            function clearAllRecords() {
+                if (getRecordsFromLocalStorage().length === 0) {
+                    showToast('No hay registros para eliminar.');
+                    return;
+                }
+                
+                if (confirm('¿Está seguro de que desea eliminar todos los registros? Esta acción no se puede deshacer.')) {
+                    localStorage.removeItem('maintenanceRecords');
+                    displayRecords();
+                    showToast('Todos los registros han sido eliminados.');
+                }
+            }
             
             // Guardar registro
             saveBtn.addEventListener('click', function() {
                 if (!equipmentType.value || !equipmentId.value || !maintenanceType.value || !responsible.value) {
                     showToast('Por favor complete todos los campos obligatorios.');
                     return;
+                }
+                
+                // Obtener la firma si existe
+                if (signaturePad.toDataURL() !== document.createElement('canvas').toDataURL()) {
+                    currentSignature = signaturePad.toDataURL();
                 }
                 
                 const maintenanceRecord = {
@@ -764,12 +805,13 @@
                 // Guardar en localStorage
                 saveToLocalStorage(maintenanceRecord);
                 
+                // Actualizar la visualización de registros
+                displayRecords();
+                
                 showToast('¡Mantenimiento registrado correctamente!');
                 
                 // Limpiar formulario después de guardar
-                setTimeout(() => {
-                    resetBtn.click();
-                }, 1500);
+                resetBtn.click();
             });
             
             // Limpiar formulario
@@ -785,19 +827,21 @@
                 currentPhoto = null;
                 currentSignature = null;
                 
-                updatePreviews();
-                updatePhotoPreview();
-                updateSignaturePreview();
-                
                 showToast('Formulario limpiado. Puede comenzar un nuevo registro.');
             });
             
             // Descargar PDF
             downloadPdfBtn.addEventListener('click', generatePDF);
             
+            // Limpiar todos los registros
+            clearAllBtn.addEventListener('click', clearAllRecords);
+            
             // Inicializar la aplicación
             initSignaturePad();
             window.addEventListener('resize', resizeCanvas);
+            
+            // Mostrar registros al cargar la página
+            displayRecords();
         });
     </script>
 </body>
