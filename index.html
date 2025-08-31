@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Registro de Mantenimientos</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Biblioteca para generar PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -37,6 +40,7 @@
             color: white;
             padding: 20px;
             text-align: center;
+            position: relative;
         }
 
         header h1 {
@@ -150,6 +154,15 @@
             background: #c0392b;
         }
 
+        .btn-warning {
+            background: #f39c12;
+            color: white;
+        }
+
+        .btn-warning:hover {
+            background: #e67e22;
+        }
+
         .signature-pad {
             width: 100%;
             height: 150px;
@@ -202,10 +215,12 @@
             display: flex;
             gap: 10px;
             margin-top: 20px;
+            flex-wrap: wrap;
         }
 
         .actions .btn {
             flex: 1;
+            min-width: 140px;
         }
 
         .datetime {
@@ -232,6 +247,13 @@
             opacity: 1;
         }
 
+        .download-btn {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
         @media (min-width: 768px) {
             .app-content {
                 flex-direction: row;
@@ -252,6 +274,22 @@
                 font-size: 24px;
             }
         }
+
+        @media (max-width: 480px) {
+            .download-btn {
+                position: static;
+                transform: none;
+                margin-top: 10px;
+            }
+            
+            header {
+                padding-bottom: 70px;
+            }
+            
+            .download-btn .btn {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
@@ -259,6 +297,11 @@
         <header>
             <h1><i class="fas fa-tools"></i> Registro de Mantenimientos</h1>
             <p>Control de equipos de cómputo e impresoras</p>
+            <div class="download-btn">
+                <button class="btn btn-warning" id="downloadPdf">
+                    <i class="fas fa-file-pdf"></i> Descargar PDF
+                </button>
+            </div>
         </header>
         
         <div class="app-content">
@@ -375,6 +418,9 @@
     <div class="toast" id="toast"></div>
 
     <script>
+        // Inicializar jsPDF
+        window.jsPDF = window.jspdf.jsPDF;
+        
         document.addEventListener('DOMContentLoaded', function() {
             // Elementos del DOM
             const equipmentType = document.getElementById('equipmentType');
@@ -391,6 +437,7 @@
             const saveBtn = document.getElementById('saveBtn');
             const resetBtn = document.getElementById('resetBtn');
             const toast = document.getElementById('toast');
+            const downloadPdfBtn = document.getElementById('downloadPdf');
             
             // Elementos de vista previa
             const previewEquipment = document.getElementById('previewEquipment');
@@ -566,6 +613,129 @@
                 localStorage.setItem('maintenanceRecords', JSON.stringify(records));
             }
             
+            // Obtener registros del localStorage
+            function getRecordsFromLocalStorage() {
+                return JSON.parse(localStorage.getItem('maintenanceRecords')) || [];
+            }
+            
+            // Generar PDF con todos los registros
+            function generatePDF() {
+                const records = getRecordsFromLocalStorage();
+                
+                if (records.length === 0) {
+                    showToast('No hay registros para descargar.');
+                    return;
+                }
+                
+                // Crear nuevo documento PDF
+                const doc = new jsPDF();
+                
+                // Agregar título
+                doc.setFontSize(20);
+                doc.setTextColor(40, 40, 40);
+                doc.text('Reporte de Mantenimientos', 105, 20, { align: 'center' });
+                
+                // Agregar fecha de generación
+                doc.setFontSize(12);
+                doc.setTextColor(100, 100, 100);
+                doc.text(`Generado el: ${new Date().toLocaleDateString('es-ES')}`, 105, 30, { align: 'center' });
+                
+                // Preparar datos para la tabla
+                const tableData = records.map(record => [
+                    record.equipmentType,
+                    record.equipmentId,
+                    record.maintenanceType,
+                    record.responsible,
+                    new Date(record.datetime).toLocaleDateString('es-ES')
+                ]);
+                
+                // Crear tabla
+                doc.autoTable({
+                    startY: 40,
+                    head: [['Tipo Equipo', 'ID/SERIAL', 'Mantenimiento', 'Responsable', 'Fecha']],
+                    body: tableData,
+                    theme: 'grid',
+                    headStyles: {
+                        fillColor: [44, 62, 80],
+                        textColor: 255,
+                        fontStyle: 'bold'
+                    },
+                    alternateRowStyles: {
+                        fillColor: [240, 240, 240]
+                    }
+                });
+                
+                // Agregar detalles para cada registro
+                let finalY = doc.lastAutoTable.finalY + 20;
+                
+                records.forEach((record, index) => {
+                    // Verificar si necesitamos una nueva página
+                    if (finalY > 250) {
+                        doc.addPage();
+                        finalY = 20;
+                    }
+                    
+                    doc.setFontSize(16);
+                    doc.setTextColor(44, 62, 80);
+                    doc.text(`Registro #${index + 1}`, 14, finalY);
+                    
+                    doc.setFontSize(12);
+                    doc.setTextColor(0, 0, 0);
+                    
+                    doc.text(`Tipo de equipo: ${record.equipmentType}`, 14, finalY + 10);
+                    doc.text(`Número de serie: ${record.equipmentId}`, 14, finalY + 20);
+                    doc.text(`Tipo de mantenimiento: ${record.maintenanceType}`, 14, finalY + 30);
+                    doc.text(`Responsable: ${record.responsible}`, 14, finalY + 40);
+                    doc.text(`Fecha: ${new Date(record.datetime).toLocaleString('es-ES')}`, 14, finalY + 50);
+                    
+                    if (record.description) {
+                        const splitDescription = doc.splitTextToSize(`Descripción: ${record.description}`, 180);
+                        doc.text(splitDescription, 14, finalY + 60);
+                        finalY += splitDescription.length * 7;
+                    }
+                    
+                    finalY += 70;
+                    
+                    // Agregar imagen si existe
+                    if (record.photo) {
+                        if (finalY > 150) {
+                            doc.addPage();
+                            finalY = 20;
+                        }
+                        
+                        doc.text('Fotografía del equipo:', 14, finalY);
+                        try {
+                            doc.addImage(record.photo, 'JPEG', 14, finalY + 5, 80, 60);
+                        } catch (e) {
+                            doc.text('Error al cargar la imagen', 14, finalY + 10);
+                        }
+                        finalY += 70;
+                    }
+                    
+                    // Agregar firma si existe
+                    if (record.signature) {
+                        if (finalY > 180) {
+                            doc.addPage();
+                            finalY = 20;
+                        }
+                        
+                        doc.text('Firma del responsable:', 14, finalY);
+                        try {
+                            doc.addImage(record.signature, 'PNG', 14, finalY + 5, 80, 30);
+                        } catch (e) {
+                            doc.text('Error al cargar la firma', 14, finalY + 10);
+                        }
+                        finalY += 40;
+                    }
+                    
+                    finalY += 10;
+                });
+                
+                // Guardar PDF
+                doc.save('reporte_mantenimientos.pdf');
+                showToast('PDF generado correctamente.');
+            }
+            
             // Event listeners para actualizar vistas previas en tiempo real
             equipmentType.addEventListener('change', updatePreviews);
             equipmentId.addEventListener('input', updatePreviews);
@@ -621,6 +791,9 @@
                 
                 showToast('Formulario limpiado. Puede comenzar un nuevo registro.');
             });
+            
+            // Descargar PDF
+            downloadPdfBtn.addEventListener('click', generatePDF);
             
             // Inicializar la aplicación
             initSignaturePad();
