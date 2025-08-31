@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Registro de Mantenimientos</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -11,12 +11,13 @@
             padding: 0;
             box-sizing: border-box;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            -webkit-tap-highlight-color: transparent;
         }
 
         body {
             background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
             min-height: 100vh;
-            padding: 20px;
+            padding: 15px;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -39,26 +40,24 @@
         }
 
         header h1 {
-            font-size: 24px;
+            font-size: 22px;
             margin-bottom: 5px;
         }
 
         .app-content {
             display: flex;
-            min-height: 500px;
+            flex-direction: column;
         }
 
         .form-section {
-            flex: 1;
-            padding: 25px;
+            padding: 20px;
             background: #f8f9fa;
         }
 
         .preview-section {
-            flex: 1;
-            padding: 25px;
+            padding: 20px;
             background: white;
-            border-left: 1px solid #eee;
+            border-top: 1px solid #eee;
             display: flex;
             flex-direction: column;
         }
@@ -66,20 +65,21 @@
         .section-title {
             font-size: 18px;
             color: #2c3e50;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
             border-bottom: 2px solid #3498db;
         }
 
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
 
         label {
             display: block;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
             font-weight: 600;
             color: #34495e;
+            font-size: 14px;
         }
 
         input, select, textarea {
@@ -89,6 +89,7 @@
             border-radius: 6px;
             font-size: 15px;
             transition: all 0.3s;
+            -webkit-appearance: none;
         }
 
         input:focus, select:focus, textarea:focus {
@@ -119,6 +120,7 @@
             align-items: center;
             justify-content: center;
             gap: 8px;
+            font-size: 14px;
         }
 
         .btn-primary {
@@ -166,33 +168,34 @@
 
         .preview-item {
             margin-bottom: 15px;
-            padding: 15px;
+            padding: 12px;
             background: #f8f9fa;
             border-radius: 6px;
+            font-size: 14px;
         }
 
         .preview-item h3 {
-            font-size: 16px;
+            font-size: 15px;
             color: #2c3e50;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
 
         .preview-image {
             width: 100%;
-            max-height: 200px;
+            max-height: 150px;
             object-fit: contain;
             border-radius: 4px;
-            margin-top: 10px;
+            margin-top: 8px;
             border: 1px solid #ddd;
         }
 
         .signature-preview {
             width: 100%;
-            height: 80px;
+            height: 70px;
             border: 1px solid #ddd;
             border-radius: 4px;
             background: white;
-            margin-top: 10px;
+            margin-top: 8px;
         }
 
         .actions {
@@ -211,14 +214,42 @@
             margin-top: 5px;
         }
 
-        @media (max-width: 768px) {
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 6px;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .toast.show {
+            opacity: 1;
+        }
+
+        @media (min-width: 768px) {
             .app-content {
-                flex-direction: column;
+                flex-direction: row;
+                min-height: 500px;
+            }
+            
+            .form-section {
+                flex: 1;
             }
             
             .preview-section {
-                border-left: none;
-                border-top: 1px solid #eee;
+                flex: 1;
+                border-left: 1px solid #eee;
+                border-top: none;
+            }
+            
+            header h1 {
+                font-size: 24px;
             }
         }
     </style>
@@ -288,12 +319,12 @@
                             <i class="fas fa-upload"></i> Subir Foto
                         </button>
                     </div>
-                    <input type="file" id="photoUpload" accept="image/*" style="display: none;">
+                    <input type="file" id="photoUpload" accept="image/*" capture="camera" style="display: none;">
                 </div>
                 
                 <div class="form-group">
                     <label>Firma del Encargado</label>
-                    <div class="signature-pad" id="signaturePad"></div>
+                    <canvas class="signature-pad" id="signaturePad"></canvas>
                     <button class="btn btn-danger" id="clearSignature">
                         <i class="fas fa-eraser"></i> Limpiar Firma
                     </button>
@@ -341,6 +372,8 @@
         </div>
     </div>
 
+    <div class="toast" id="toast"></div>
+
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             // Elementos del DOM
@@ -357,6 +390,7 @@
             const clearSignature = document.getElementById('clearSignature');
             const saveBtn = document.getElementById('saveBtn');
             const resetBtn = document.getElementById('resetBtn');
+            const toast = document.getElementById('toast');
             
             // Elementos de vista previa
             const previewEquipment = document.getElementById('previewEquipment');
@@ -369,6 +403,29 @@
             let currentPhoto = null;
             let currentSignature = null;
             let isDrawing = false;
+            let ctx = signaturePad.getContext('2d');
+            
+            // Ajustar tamaño del canvas para alta resolución
+            function resizeCanvas() {
+                const ratio = window.devicePixelRatio || 1;
+                signaturePad.width = signaturePad.offsetWidth * ratio;
+                signaturePad.height = signaturePad.offsetHeight * ratio;
+                ctx.scale(ratio, ratio);
+                ctx.lineWidth = 2;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.strokeStyle = '#000';
+            }
+            
+            // Mostrar notificación toast
+            function showToast(message, duration = 3000) {
+                toast.textContent = message;
+                toast.classList.add('show');
+                
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                }, duration);
+            }
             
             // Actualizar fecha y hora en tiempo real
             function updateDateTime() {
@@ -389,11 +446,7 @@
             
             // Inicializar la firma
             function initSignaturePad() {
-                const ctx = signaturePad.getContext('2d');
-                ctx.lineWidth = 2;
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-                ctx.strokeStyle = '#000';
+                resizeCanvas();
                 
                 signaturePad.addEventListener('mousedown', startDrawing);
                 signaturePad.addEventListener('mousemove', draw);
@@ -434,7 +487,6 @@
                 const x = e.clientX - rect.left;
                 const y = e.clientY - rect.top;
                 
-                const ctx = signaturePad.getContext('2d');
                 ctx.beginPath();
                 ctx.moveTo(x, y);
             }
@@ -446,7 +498,6 @@
                 const x = e.clientX - rect.left;
                 const y = e.clientY - rect.top;
                 
-                const ctx = signaturePad.getContext('2d');
                 ctx.lineTo(x, y);
                 ctx.stroke();
             }
@@ -456,9 +507,8 @@
                 updateSignaturePreview();
             }
             
-            // Capturar foto (simulado)
+            // Capturar foto
             captureBtn.addEventListener('click', function() {
-                alert('En una aplicación real, esto activaría la cámara del dispositivo. Para este ejemplo, puede subir una imagen.');
                 photoUpload.click();
             });
             
@@ -480,7 +530,6 @@
             
             // Limpiar firma
             clearSignature.addEventListener('click', function() {
-                const ctx = signaturePad.getContext('2d');
                 ctx.clearRect(0, 0, signaturePad.width, signaturePad.height);
                 currentSignature = null;
                 updateSignaturePreview();
@@ -510,6 +559,13 @@
                 }
             }
             
+            // Guardar en localStorage
+            function saveToLocalStorage(record) {
+                let records = JSON.parse(localStorage.getItem('maintenanceRecords')) || [];
+                records.push(record);
+                localStorage.setItem('maintenanceRecords', JSON.stringify(records));
+            }
+            
             // Event listeners para actualizar vistas previas en tiempo real
             equipmentType.addEventListener('change', updatePreviews);
             equipmentId.addEventListener('input', updatePreviews);
@@ -520,11 +576,10 @@
             // Guardar registro
             saveBtn.addEventListener('click', function() {
                 if (!equipmentType.value || !equipmentId.value || !maintenanceType.value || !responsible.value) {
-                    alert('Por favor complete todos los campos obligatorios.');
+                    showToast('Por favor complete todos los campos obligatorios.');
                     return;
                 }
                 
-                // En una aplicación real, aquí se enviarían los datos a un servidor
                 const maintenanceRecord = {
                     equipmentType: equipmentType.value,
                     equipmentId: equipmentId.value,
@@ -536,11 +591,15 @@
                     signature: currentSignature
                 };
                 
-                console.log('Registro de mantenimiento:', maintenanceRecord);
+                // Guardar en localStorage
+                saveToLocalStorage(maintenanceRecord);
                 
-                alert('¡Mantenimiento registrado correctamente!\n\nEn una aplicación real, estos datos se guardarían en una base de datos.');
+                showToast('¡Mantenimiento registrado correctamente!');
                 
-                // Aquí podrías agregar código para guardar en localStorage o enviar a un servidor
+                // Limpiar formulario después de guardar
+                setTimeout(() => {
+                    resetBtn.click();
+                }, 1500);
             });
             
             // Limpiar formulario
@@ -551,7 +610,6 @@
                 description.value = '';
                 responsible.value = '';
                 
-                const ctx = signaturePad.getContext('2d');
                 ctx.clearRect(0, 0, signaturePad.width, signaturePad.height);
                 
                 currentPhoto = null;
@@ -561,15 +619,12 @@
                 updatePhotoPreview();
                 updateSignaturePreview();
                 
-                alert('Formulario limpiado. Puede comenzar un nuevo registro.');
+                showToast('Formulario limpiado. Puede comenzar un nuevo registro.');
             });
             
             // Inicializar la aplicación
             initSignaturePad();
-            
-            // Establecer tamaño del canvas de firma
-            signaturePad.width = signaturePad.offsetWidth;
-            signaturePad.height = signaturePad.offsetHeight;
+            window.addEventListener('resize', resizeCanvas);
         });
     </script>
 </body>
